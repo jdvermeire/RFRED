@@ -1,4 +1,4 @@
-Package: RFRED
+Package: rfred
 Version: 0.1-0
 Date: 2015-02-27
 Title: A FRED API Package for R
@@ -10,5 +10,5 @@ Depends: R (>= 3.1.1), rjson
 Description: A simple, yet powerful package to easily browse and retrieve data 
   from the US Federal Reserve Economic Data (FRED) API.
 License: GPL-2
-URL: http://github.com/jdvermeire/RFRED
-BugReports: https://github.com/jdvermeire/RFRED/issues
+URL: http://github.com/jdvermeire/rfred
+BugReports: https://github.com/jdvermeire/rfred/issues
