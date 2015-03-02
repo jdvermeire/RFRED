@@ -37,49 +37,553 @@ rfred.character <- function(key) {
       # Returns:
       #   A list converted from a json object
       
-      params <- rbind(api.params.k, params)  # add constant parameters
-      qry <- paste(paste0(api.url, op), paste(parApply(cluster, params, 1, 
-                                                       paste, collapse = "="), 
-                                              collapse = "&"), sep = "?")
+      params <- rbind(api.params.k, params,
+                      stringsAsFactors = FALSE)  # add constant parameters
+      qry <- paste(paste0(api.url, op), 
+                   paste(parApply(cluster, params, 1, paste, collapse = "="), 
+                         collapse = "&"), sep = "?")
       qry.con <- url(qry)  # create connection url
       on.exit(close(qry.con))  # make sure connection closes properly
       ans <- fromJSON(file = qry.con)  # parse json
+      if (isOpen(qry.con)) close(qry.con)
+      return(ans)
+    }
+    
+    # parse functions
+    parse.category <- function(obj) {
+      # Parses list object as category
+      #
+      # Args:
+      #   obj: the object to parse
+      #
+      # Returns:
+      #   a category object
+      
+      ans <- list(id = as.integer(obj$id),
+                  name = obj$name,
+                  parent.id = as.integer(obj$parent_id))
+      #set class
+      class(ans) <- "rfred.category"
+      return(ans)
+    }
+    parse.category.list <- function(obj) {
+      # Parses list of categories from FRED
+      #
+      # Args:
+      #   obj: the list of categories object
+      #
+      # Returns:
+      #   The parsed list of categories
+      
+      # init ans
+      ans <- NULL
+      # parse into "rfred.category" class
+      ans <- parLapply(cluster, obj, fun = parse.category)
+      # parse into a data.frame for easy viewing
+      cat.df <- parLapply(cluster, ans, fun = c)
+      cat.df <_ data.frame(do.call("rbind", cat.df), stringsAsFactors = FALSE)
+      # use ids as names for list elements
+      names(ans) <- cat.df$id
+      # add data.frame to ans
+      ans$list <- cat.df
+      # add function to easily get category
+      ans$get <- function(x) {
+        # Gets category from list by id
+        #
+        # Args:
+        #   x: character or integer value of id
+        #
+        # Returns:
+        #   A category
+        
+        # TODO(jdvermeire): add error handling for unknown ids
+        x <- as.character(x)
+        ans[[x]]
+      }
+      # set class
+      class(ans) <- "rfred.category.list"
+      return(ans)
+    }
+    parse.release <- function(obj) {
+      # Parses FRED returned release
+      #
+      # Args:
+      #   obj: the object to parse
+      #
+      # Returns:
+      #   The release
+      
+      # init ans
+      ans <- list(id = as.integer(obj$id),
+                  realtime.start = as.Date(obj$realtime_start),
+                  realtime.end = as.Date(obj$realtime_end),
+                  name = obj$name,
+                  press.release = as.logical(obj$press_release),
+                  link = obj$link,
+                  notes = obj$notes)
+      # set class
+      class(ans) <- "rfred.release"
+      return(ans)
+    }
+    parse.release.list <- function(obj) {
+      # Parses FRED returned list of releases
+      #
+      # Args:
+      #   obj: the object to parse
+      #
+      # Returns
+      #   A list of releases
+      
+      # init ans
+      ans <- NULL
+      # parse into "rfred.release" class
+      ans <- parLapply(cluster, obj, fun = parse.release)
+      # parse into a data.frame for easy viewing
+      rls.df <- parLapply(cluster, ans, fun = c)
+      rls.df <- data.frame(do.call("rbind", rls.df), stringsAsFactors = FALSE)
+      # use ids as names for list elements
+      names(ans) <- rls.df$id
+      # add data.frame to ans
+      ans$list <- rls.df
+      # add function to easily get release
+      ans$get <- function(x) {
+        # Gets release from list by id
+        #
+        # Args:
+        #   x: character or integer value of id
+        #
+        # Returns:
+        #   A release
+        
+        # TODO(jdvermeire): add error handling for unknown ids
+        x <- as.character(x)
+        ans[[x]]
+      }
+      # set class
+      class(ans) <- "rfred.release.list"
+      return(ans)
+    }
+    parse.series <- function(obj) {
+      # Parses a FRED returned series
+      #
+      # Args:
+      #   obj: the object to parse
+      #
+      # Returns:
+      #   A series
+      
+      # init ans
+      ans <- list(id = obj$id,
+                  realtime.start = as.Date(obj$realtime_start),
+                  realtime.end = as.Date(obj$realtime_end),
+                  title = obj$title,
+                  observation.start = as.Date(obj$observation_start),
+                  observation.end = as.Date(obj$observation_end),
+                  frequency = obj$frequency,
+                  frequency.short = obj$frequency_short,
+                  units = obj$units,
+                  units.short = obj$units_short,
+                  seasonal.adjustment = obj$seasonal_adjustment,
+                  seasonal.adjustment.short = obj$seasonal_adjustment_short,
+                  last.updated = as.POSIXct(paste0(obj$last_updated, "00"),
+                                            format = "%Y-%m-%d %H:%M:%S%z"),
+                  popularity = as.integer(obj$popularity),
+                  notes = obj$notes)
+      # set class
+      class(ans) <- "rfred.series"
+      return(ans)
+    }
+    parse.series.list <- function(obj) {
+      # Parses FRED returned list of series
+      #
+      # Args:
+      #   obj: the object to parse
+      #
+      # Returns
+      #   A list of series
+      
+      # init ans
+      ans <- NULL
+      # parse into "rfred.series" class
+      ans <- parLapply(cluster, obj, fun = parse.series)
+      # parse into a data.frame for easy viewing
+      srs.df <- parLapply(cluster, ans, fun = c)
+      srs.df <- data.frame(do.call("rbind", srs.df), stringsAsFactors = FALSE)
+      # use ids as names for list elements
+      names(ans) <- srs.df$id
+      # add data.frame to ans
+      ans$list <- srs.df
+      # add function to easily get series
+      ans$get <- function(x) {
+        # Gets series from list by id
+        #
+        # Args:
+        #   x: character or integer value of id
+        #
+        # Returns:
+        #   A series
+        
+        # TODO(jdvermeire): add error handling for unknown ids
+        x <- as.character(x)
+        ans[[x]]
+      }
+      # set class
+      class(ans) <- "rfred.series.list"
+      return(ans)
+    }
+    parse.source <- function(obj) {
+      # Parses a FRED returned source
+      #
+      # Args:
+      #   obj: the object to parse
+      #
+      # Returns:
+      #   A source
+      
+      # init ans
+      ans <- list(id = as.integer(obj$id),
+                  realtime.start = as.Date(obj$realtime_start),
+                  realtime.end = as.Date(obj$realtime_end),
+                  name = obj$name,
+                  link = obj$link,
+                  notes = obj$notes)
+      # set class
+      class(ans) <- "rfred.source"
+      return(ans)
+    }
+    parse.source.list <- function(obj) {
+      # Parses FRED returned list of source
+      #
+      # Args:
+      #   obj: the object to parse
+      #
+      # Returns
+      #   A list of source
+      
+      # init ans
+      ans <- NULL
+      # parse into "rfred.source" class
+      ans <- parLapply(cluster, obj, fun = parse.source)
+      # parse into a data.frame for easy viewing
+      src.df <- parLapply(cluster, ans, fun = c)
+      src.df <- data.frame(do.call("rbind", src.df), stringsAsFactors = FALSE)
+      # use ids as names for list elements
+      names(ans) <- src.df$id
+      # add data.frame to ans
+      ans$list <- src.df
+      # add function to easily get source
+      ans$get <- function(x) {
+        # Gets source from list by id
+        #
+        # Args:
+        #   x: character or integer value of id
+        #
+        # Returns:
+        #   A source
+        
+        # TODO(jdvermeire): add error handling for unknown ids
+        x <- as.character(x)
+        ans[[x]]
+      }
+      # set class
+      class(ans) <- "rfred.source.list"
+      return(ans)
+    }
+    parse.tag <- function(obj) {
+      # Parses a FRED returned tag
+      #
+      # Args:
+      #   obj: the object to parse
+      #
+      # Returns:
+      #   A tag
+      
+      # init ans
+      ans <- list(name = obj$name,
+                  group.id = obj$group_id,
+                  notes = obj$notes,
+                  created = as.POSIXct(paste0(obj$created, "00"), 
+                                       format = "%Y-%m-%d %H:%M:%S%z"),
+                  popularity = as.integer(obj$popularity),
+                  series.count = as.integer(obj$series_count))
+      # set class
+      class(ans) <- "rfred.tag"
+      return(ans)
+    }
+    parse.tag.list <- function(obj) {
+      # Parses FRED returned list of tags
+      #
+      # Args:
+      #   obj: the object to parse
+      #
+      # Returns
+      #   A list of tags
+      
+      # init ans
+      ans <- NULL
+      # parse into "rfred.tag" class
+      ans <- parLapply(cluster, obj, fun = parse.tag)
+      # parse into a data.frame for easy viewing
+      tag.df <- parLapply(cluster, ans, fun = c)
+      tag.df <- data.frame(do.call("rbind", tag.df), stringsAsFactors = FALSE)
+      # use names for list elements
+      names(ans) <- tag.df$name
+      # add data.frame to ans
+      ans$list <- tag.df
+      # add function to easily get tag
+      ans$get <- function(x) {
+        # Gets tag from list by name
+        #
+        # Args:
+        #   x: character or integer value of name
+        #
+        # Returns:
+        #   A tag
+        
+        # TODO(jdvermeire): add error handling for unknown names
+        x <- as.character(x)
+        ans[[x]]
+      }
+      # set class
+      class(ans) <- "rfred.tag.list"
       return(ans)
     }
     
     # wrapper functions
-    api.category <- function(category_id = 0) {
+    api.category <- function(category.id = 0) {
       # Retrieves category from FRED
       #
       # Args:
-      #   category_id: the id for the category
+      #   category.id: the id for the category
       #
       # Returns:
       #   The category
       
-      params <- c("category_id", category_id)
+      # set params arg
+      params <- c("category_id", category.id)
       # query api
-      ans <- api.query("/category", params)$categories
-      # set class
-      class(ans) <- "rfred.category"
+      rtn <- api.query("/category", params)$categories
+      # parse category
+      ans <- parse.category(rtn)
       return(ans)      
     }
-    api.category.children <- function(category.id, realtime.start, 
-                                      realtime.end) {}
-    api.category.related <- function(category.id, realtime.start, 
-                                     realtime.end) {}
-    api.category.series <- function(category.id, realtime.start, realtime.end,
-                                    limit, offset, order.by, sort.order,
-                                    filter.variable, filter.value, tag.names) {}
-    api.category.tags <- function(category.id, realtime.start, realtime.end,
-                                  tag.names, tag.group.id, search.text, limit,
-                                  offset, order.by, sort.order) {}
-    api.category.related.tags <- function(category.id, realtime.start,
-                                          realtime.end, tag.names, tag.group.id,
-                                          search.text, limit, offset, order.by,
-                                          sort.order) {}
+    api.category.children <- function(category.id = 0, 
+                                      realtime.start = Sys.Date(), 
+                                      realtime.end = Sys.Date()) {
+      # Retrieves a list of child categories for the given category
+      #
+      # Args:
+      #   category.id: the id for the parent category
+      #   realtime.start: the realtime period start
+      #   realtime.end: the realtime period end
+      #
+      # Returns:
+      #   A list of categories that are childern of the parent
+      
+      # set params arg for query
+      params <- rbind(c("category_id", category.id),
+                      c("realtime_start", as.character(realtime.start)),
+                      c("realtime_end", as.character(realtime.end)),
+                      stringsAsFactors = FALSE)
+      # execute query
+      rtn <- api.query("/category/children", params)$categories
+      # parse to category list
+      ans <- parse.category.list(rtn)
+      return(ans)
+    }
+    api.category.related <- function(category.id = 0, 
+                                     realtime.start = Sys.Date(), 
+                                     realtime.end = Sys.Date()) {
+      # Retrieves a list of related categories for the given category
+      #
+      # Args:
+      #   category.id: the category id
+      #   realtime.start: the realtime period start
+      #   realtime.end: the realtime period end
+      #
+      # Returns:
+      #   A list of categories related to the given category
+      
+      # set params arg for query
+      params <- rbind(c("category_id", category.id),
+                      c("realtime_start", as.character(realtime.start)),
+                      c("realtime_end", as.character(realtime.end)))
+      # execute query
+      rtn <- api.query("category/related", params)$categories
+      # parse to category list
+      ans <- parse.catgory.list(rtn)
+      return(ans)
+    }
+    api.category.series <- function(category.id, 
+                                    realtime.start = Sys.Date(), 
+                                    realtime.end = Sys.Date(),
+                                    limit = 1000L, 
+                                    offset = 0L, 
+                                    order.by = c("series_id", "title", "units",
+                                                 "frequency", 
+                                                 "seasonal_adjustment",
+                                                 "realtime_start", 
+                                                 "realtime_end",
+                                                 "last_updated",
+                                                 "observation_start",
+                                                 "observation_end",
+                                                 "popularity"), 
+                                    sort.order = c("asc", "desc"),
+                                    filter.variable, 
+                                    filter.value, 
+                                    tag.names,
+                                    exclude.tag.names) {
+      # Retrieves a list of series for a category
+      #
+      # Args:
+      #   category.id: the id for the category
+      #   realtime.start: the realtime start
+      #   realtime.end: the realtime end
+      #   limit: the max number of records returned by the query
+      #   offset: the paging offset
+      #   order.by: the attribute to order the results
+      #   sort.order: ascending or descending
+      #   filter.variable: field to filter on
+      #   filter.value: the value to filter
+      #   tag.names: list of tags to filter on
+      #   exclude.tag.names: list of tags to exclude
+      #
+      # Returns:
+      #   A list of series
+      
+      # TODO(jdvermeire): error handling for missing args
+      # set params arg
+      params <- rbind(c("category_id", category.id),
+                      c("realtime_start", as.character(realtime.start)),
+                      c("realtime_end", as.character(realtime.end)),
+                      c("limit", limit),
+                      c("offset", offset),
+                      c("order_by", order.by[1]),
+                      c("sort_order", sort.order[1]),
+                      if (!is.null(filter.variable)) {c("filter_variable",
+                                                        filter.variable)},
+                      if (!is.null(filter.variable)) {c("filter_value",
+                                                        filter.value)},
+                      if (!is.null(tag.names)) {
+                        c("tag_names", paste0(tag.names, collapse = ";"))
+                      },
+                      if (!is.null(exclude.tag.names)) {
+                        c("exclude_tag_names", 
+                          paste0(exclude.tag.names, collapse = ";"))
+                      })
+      # execute query
+      rtn <- api.query("/category/series", params)$seriess
+      # parse result
+      ans <- parse.series.list(rtn)
+      return(ans)
+    }
+    api.category.tags <- function(category.id, 
+                                  realtime.start = Sys.Date(), 
+                                  realtime.end = Sys.Date(),
+                                  tag.names,
+                                  exclude.tag.names,
+                                  tag.group.id, 
+                                  search.text, 
+                                  limit,
+                                  offset, 
+                                  order.by = c("series_count",
+                                               "popularity",
+                                               "created",
+                                               "name",
+                                               "group_id"), 
+                                  sort.order = c("asc", "desc")) {
+      # TODO(jdvermeire): error handling
+      # set params
+      params <- rbind(c("category_id", category.id),
+                      c("realtime_start", as.character(realtime.start)),
+                      c("realtime_end", as.character(realtime.end)),
+                      if (!is.null(tag.names)) {
+                        c("tag_names", paste0(tag.names, collapse = ";"))
+                      },
+                      if (!is.null(exclude.tag.names)) {
+                        c("exclude_tag_names", paste0(exclude.tag.names,
+                                                      collapse = ";"))
+                      },
+                      if (!is.null(tag.group.id)) {
+                        c("tag_group_id", tag.group.id[1])
+                      },
+                      if (!is.null(search.text)) {
+                        c("search_text", paste0(search.text, collapse = " "))
+                      },
+                      c("limit", limit),
+                      c("offset", offset),
+                      c("order_by", order.by[1]),
+                      c("sort_order", sort.order[1]))
+      # execute query
+      rtn <- api.query("/category/tags", params)$tags
+      # parse results
+      ans <- parse.tag.list(rtn)
+      return(ans)
+    }
+    api.category.related.tags <- function(category.id, 
+                                          realtime.start = Sys.Date(), 
+                                          realtime.end = Sys.Date(),
+                                          tag.names,
+                                          exclude.tag.names,
+                                          tag.group.id, 
+                                          search.text, 
+                                          limit,
+                                          offset, 
+                                          order.by = c("series_count",
+                                                       "popularity",
+                                                       "created",
+                                                       "name",
+                                                       "group_id"), 
+                                          sort.order = c("asc", "desc")) {
+      # TODO(jdvermeire): error handling
+      # set params
+      params <- rbind(c("category_id", category.id),
+                      c("realtime_start", as.character(realtime.start)),
+                      c("realtime_end", as.character(realtime.end)),
+                      if (!is.null(tag.names)) {
+                        c("tag_names", paste0(tag.names, collapse = ";"))
+                      },
+                      if (!is.null(exclude.tag.names)) {
+                        c("exclude_tag_names", paste0(exclude.tag.names,
+                                                      collapse = ";"))
+                      },
+                      if (!is.null(tag.group.id)) {
+                        c("tag_group_id", tag.group.id[1])
+                      },
+                      if (!is.null(search.text)) {
+                        c("search_text", paste0(search.text, collapse = " "))
+                      },
+                      c("limit", limit),
+                      c("offset", offset),
+                      c("order_by", order.by[1]),
+                      c("sort_order", sort.order[1]))
+      # execute query
+      rtn <- api.query("/category/related_tags", params)$tags
+      # parse results
+      ans <- parse.tag.list(rtn)
+      return(ans)
+      
+    }
     
-    api.releases <- function() {}
+    api.releases <- function(realtime.start = Sys.Date(),
+                             realtime.end = Sys.Date(),
+                             limit = 1000L,
+                             offset = 0L,
+                             order.by = c("release_id",
+                                          "name",
+                                          "press_release",
+                                          "realtime_start",
+                                          "realtime_end"),
+                             sort.order = c("asc", "desc")) {
+      # set params
+      params <- rbind(c("realtime_start", as.character(realtime.start)),
+                      c("realtime_end", as.character(realtime.end)),
+                      c("limit", limit),
+                      c("offset", offset),
+                      c("order_by", order.by[1]),
+                      c("sort_order", sort.order[1]))
+      
+    }
     api.releases.dates <- function() {}
     api.release <- function() {}
     api.release.dates <- function() {}
@@ -138,17 +642,17 @@ rfred.character <- function(key) {
                       c("output_type", output.type),
                       if (!is.null(vintage.dates)) {
                         c("vintage_dates", vintage.dates)
-                      })
+                      }, stringsAsFactors = FALSE)
       # query api
       rtn <- api.query("/series/observations", params)
       # convert observations lists into vectors
       ans <- parLapply(cluster, rtn$observations, 
-                                    fun = function(dat) {
-                                      c(realtime.start = dat$realtime_start,
-                                        realtime.end = dat$realtime_end,
-                                        date = dat$date,
-                                        value = dat$value)
-                                    })
+                       fun = function(dat) {
+                         c(realtime.start = dat$realtime_start,
+                           realtime.end = dat$realtime_end,
+                           date = dat$date,
+                           value = dat$value)
+                       })
       # combine results into data.frame
       ans <- data.frame(do.call("rbind", ans), stringsAsFactors = FALSE)
       # convert fields
@@ -206,23 +710,6 @@ rfred.obs.character <- function(fred, series, ...) {
   fun(series)
 }
 rfred.obs.rfred.series <- function(fred, series, ...) {
-  rfred.obs(fred, series$id)
+  rfred.obs(fred, series$id, ...)
 }
 
-# print.rfred.series.observations <- function(x) {
-#   ans <- paste0(apply(cbind(encodeString(c("RealTime Start:", "RealTime End:",
-#                                           "Observation Start:", 
-#                                           "Observation End:", "Units:", 
-#                                           "Output Type:", "File Type:",
-#                                           "Order by:", "Sort Order:", "Offset:",
-#                                           "Limit:", "Count:"), width = 20),
-#                            c(attr(x, "realtime.start"), attr(x, "realtime.end"),
-#                              attr(x, "observation.start"), 
-#                              attr(x, "observation.end"), attr(x, "units"),
-#                              attr(x, "output.type"), attr(x, "file.type"), 
-#                              attr(x, "order.by"), attr(x, "sort.order"),
-#                              attr(x, "offset"), attr(x, "limit"), 
-#                              attr(x, "count"))), 1, paste0, collapse = ""), 
-#                 collapse = "\n")
-#  cat(ans)
-# }
