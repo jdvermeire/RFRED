@@ -81,7 +81,7 @@ rfred.character <- function(key) {
       ans <- parLapply(cluster, obj, fun = parse.category)
       # parse into a data.frame for easy viewing
       cat.df <- parLapply(cluster, ans, fun = c)
-      cat.df <_ data.frame(do.call("rbind", cat.df), stringsAsFactors = FALSE)
+      cat.df <- data.frame(do.call("rbind", cat.df), stringsAsFactors = FALSE)
       # use ids as names for list elements
       names(ans) <- cat.df$id
       # add data.frame to ans
@@ -161,6 +161,61 @@ rfred.character <- function(key) {
       }
       # set class
       class(ans) <- "rfred.release.list"
+      return(ans)
+    }
+    parse.release.date <- function(obj) {
+      # Parses a FRED returned release date
+      #
+      # Args:
+      #   obj: the object to parse
+      #
+      # Returns:
+      #   The release date
+      
+      # init ans
+      ans <- list(id = as.integer(obj$release_id),
+                  name = obj$release_name,
+                  date = as.Date(obj$date))
+      # set class
+      class(ans) <- "rfred.release.date"
+      return(ans)
+    }
+    parse.release.date.list <- function(obj) {
+      # Parses FRED returned list of release dates
+      #
+      # Args:
+      #   obj: the object to parse
+      #
+      # Returns
+      #   A list of release dates
+      
+      # init ans
+      ans <- NULL
+      # parse into "rfred.release.date" class
+      ans <- parLapply(cluster, obj, fun = parse.release.date)
+      # parse into a data.frame for easy viewing
+      rls.df <- parLapply(cluster, ans, fun = c)
+      rls.df <- data.frame(do.call("rbind", rls.df), stringsAsFactors = FALSE)
+      # use ids as names for list elements
+      names(ans) <- rls.df$id
+      # add data.frame to ans
+      ans$list <- rls.df
+      # add function to easily get release date
+      ans$get <- function(x) {
+        # Gets release date from list by id
+        #
+        # Args:
+        #   x: character or integer value of id
+        #
+        # Returns:
+        #   A release date
+        
+        # TODO(jdvermeire): add error handling for unknown ids
+        x <- as.character(x)
+        ans[[x]]
+      }
+      # set class
+      class(ans) <- "rfred.release.date.list"
       return(ans)
     }
     parse.series <- function(obj) {
@@ -367,6 +422,20 @@ rfred.character <- function(key) {
       ans <- parse.category(rtn)
       return(ans)      
     }
+
+    api.generic.category.list <- function(api.call, id.name, id.value,
+                                          realtime.start, realtime.end) {
+      # set params
+      params <- rbind(c(id.name, id.value),
+                      c("realtime_start", as.character(realtime.start)),
+                      c("realtime_end", as.character(realtime.end)),
+                      stringsAsFactors = FALSE)
+      # execute query
+      rtn <- api.query(api.call, params)$categories
+      # parse
+      ans <- parse.category.list(rtn)
+      return(ans)
+    }
     api.category.children <- function(category.id = 0, 
                                       realtime.start = Sys.Date(), 
                                       realtime.end = Sys.Date()) {
@@ -380,16 +449,8 @@ rfred.character <- function(key) {
       # Returns:
       #   A list of categories that are childern of the parent
       
-      # set params arg for query
-      params <- rbind(c("category_id", category.id),
-                      c("realtime_start", as.character(realtime.start)),
-                      c("realtime_end", as.character(realtime.end)),
-                      stringsAsFactors = FALSE)
-      # execute query
-      rtn <- api.query("/category/children", params)$categories
-      # parse to category list
-      ans <- parse.category.list(rtn)
-      return(ans)
+      api.generic.category.list("/category/children", "category_id", 
+                                category.id, realtime.start, realtime.end)
     }
     api.category.related <- function(category.id = 0, 
                                      realtime.start = Sys.Date(), 
@@ -404,15 +465,253 @@ rfred.character <- function(key) {
       # Returns:
       #   A list of categories related to the given category
       
-      # set params arg for query
-      params <- rbind(c("category_id", category.id),
+      api.generic.category.list("/category/related", "category_id", 
+                                category.id, realtime.start, realtime.end)
+    }
+    api.series.categories <- function(series.id,
+                                      realtime.start = Sys.Date(),
+                                      realtime.end = Sys.Date()) {
+      # Retrieves a list of categories for a series
+      #
+      # Args:
+      #   series.id: the series id
+      #   realtime.start: the realtime period start
+      #   realtime.end: the realtime period end
+      #
+      # Returns:
+      #   A list of categories
+      api.generic.category.list("/series/categories", "series_id", series.id,
+                                realtime.start, realtime.end)
+    }
+    
+    api.generic.release <- function(api.call, id.name, id.value, realtime.start,
+                                    realtime.end) {
+      # set params
+      params <- rbind(c(id.name, id.value),
                       c("realtime_start", as.character(realtime.start)),
-                      c("realtime_end", as.character(realtime.end)))
+                      c("realtime_end", as.character(realtime.end)),
+                      stringsAsFactors = FALSE)
       # execute query
-      rtn <- api.query("category/related", params)$categories
-      # parse to category list
-      ans <- parse.catgory.list(rtn)
+      rtn <- api.query(api.call, params)$releases
+      # parse
+      ans <- parse.release(rtn)
       return(ans)
+    }
+    api.release <- function(release.id,
+                            realtime.start = Sys.Date(),
+                            realtime.end = Sys.Date()) {
+      # Retrieves a release
+      #
+      # Args:
+      #   release.id: the release id
+      #   realtime.start: the realtime period start
+      #   realtime.end: the realtime period end
+      #
+      # Returns:
+      #   A release
+      api.generic.release("/release", "release_id", release.id, realtime.start,
+                          realtime.end)
+    }
+    api.series.release <- function(series.id,
+                                   realtime.start = Sys.Date(),
+                                   realtime.end = Sys.Date()) {
+      # Retrieves a release for a series
+      #
+      # Args:
+      #   series.id: the series id
+      #   realtime.start: the realtime period start
+      #   realtime.end: the realtime period end
+      #
+      # Returns:
+      #   A release
+      api.generic.release("/series/release", "series_id", series.id,
+                          realtime.start, realtime.end)
+    }
+
+    api.generic.release.list <- function(api.call, id.name, id.value, 
+                                         realtime.start, realtime.end, limit,
+                                         offset, order.by, sort.order) {
+      # set params
+      params <- rbind(c(id.name, id.value),
+                      c("realtime_start", as.character(realtime.start)),
+                      c("realtime_end", as.character(realtime.end)),
+                      c("limit", limit),
+                      c("offset", offset),
+                      c("order_by", order.by[1]),
+                      c("sort_order", sort.order[1]),
+                      stringsAsFactors = FALSE)
+      # execute query
+      rtn <- api.query(api.call, params)$releases
+      #parse results
+      ans <- parse.release.list(rtn)
+      return(ans)
+    }
+    api.releases <- function(realtime.start = Sys.Date(),
+                             realtime.end = Sys.Date(),
+                             limit = 1000L,
+                             offset = 0L,
+                             order.by = c("release_id",
+                                          "name",
+                                          "press_release",
+                                          "realtime_start",
+                                          "realtime_end"),
+                             sort.order = c("asc", "desc")) {
+      # Retrieves a list of releases
+      #
+      # Args:
+      #   realtime.start: the realtime start date
+      #   realtime.end: the realtime end date
+      #   limit: the max number of records to return
+      #   offset: the pagenation offset
+      #   order.by: the field by which to sort
+      #   sort.order: the direction of sort
+      #
+      # Returns:
+      #   a list of releases
+      api.generic.release.list("/releases", NULL, NULL, realtime.start,
+                               realtime.end, limit, offset, order.by, 
+                               sort.order)
+    }
+    api.source.releases <- function(source.id,
+                                    realtime.start = Sys.Date(),
+                                    realtime.end = Sys.Date(),
+                                    limit = 1000L,
+                                    offset = 0L,
+                                    order.by = c("release_id",
+                                                 "name",
+                                                 "press_release",
+                                                 "realtime_start",
+                                                 "realtime_end"),
+                                    sort.order = c("asc", "desc")) {
+      # Retrieves a list of releases for a source
+      #
+      # Args:
+      #   source.id: the source id
+      #   realtime.start: the realtime start date
+      #   realtime.end: the realtime end date
+      #   limit: the page limit
+      #   offset: the page offset
+      #   order.by: the field by which to sort
+      #   sort.order: the direction of sort
+      #
+      # Returns:
+      #   a list of releases
+      api.generic.release.list("/source/releases", "source_id", source.id, 
+                               realtime.start, realtime.end, limit, offset, 
+                               order.by, sort.order)
+    }
+    
+    api.generic.release.date.list <- function(api.call, id.name, id.value,
+                                              realtime.start, realtime.end,
+                                              limit, offset, order.by,
+                                              sort.order,
+                                              include.dates.with.no.data) {
+      # set params
+      params <- rbind(c(id.name, id.value),
+                      c("realtime_start", as.character(realtime.start)),
+                      c("realtime_end", as.character(realtime.end)),
+                      c("limit", limit),
+                      c("offset", offset),
+                      c("order_by", order.by[1]),
+                      c("sort_order", sort.order[1]),
+                      c("include_release_dates_with_no_data",
+                        tolower(as.character(include.dates.with.no.data[1]))),
+                      stringsAsFactors = FALSE)
+      # execute query
+      rtn <- api.query(api.call, params)$release_dates
+      # parse
+      ans <- parse.release.date.list(rtn)
+      return(ans)
+    }
+    api.releases.dates <- function(realtime.start = paste(format(Sys.Date(),
+                                                                 format = "%Y"),
+                                                          "01", "01", sep = "-"),
+                                   realtime.end = "9999-12-31",
+                                   limit = 1000L,
+                                   offset = 0L,
+                                   order.by = c("release_date", "release_id",
+                                                "release_name"),
+                                   sort.order = c("desc", "asc"),
+                                   include.dates.with.no.data = c(FALSE, TRUE)) 
+    {
+      # Retrieves a list of dates for all releases
+      #
+      # Args:
+      #   realtime.start: the realtime start date
+      #   realtime.end: the realtime end date
+      #   limit: the page limit
+      #   offset: the page offset
+      #   order.by: the field by which to sort
+      #   sort.order: the sort direction
+      #   include.dates.with.no.data: logical flag to include dates with no data
+      #
+      # Returns:
+      #   a list of release dates
+      api.generic.release.date.list("/releases/dates", NULL, NULL, 
+                                    realtime.start, realtime.end, limit, offset,
+                                    order.by, sort.order,
+                                    include.dates.with.no.data)
+    }
+    api.release.dates <- function(release.id,
+                                  realtime.start = "1776-07-04",
+                                  realtime.end = "9999-12-31",
+                                  limit = 1000L,
+                                  offset = 0L,
+                                  sort.order = c("asc", "desc"),
+                                  include.dates.with.no.data = c(FALSE, TRUE)) {
+      # Retrieves a list of dates for a release
+      #
+      # Args:
+      #   release.id: the release id
+      #   realtime.start: the realtime start date
+      #   realtime.end: the realtime end date
+      #   limit: the page limit
+      #   offset: the page offset
+      #   order.by: the field by which to sort
+      #   sort.order: the sort direction
+      #   include.dates.with.no.data: logical flag to include dates with no data
+      #
+      # Returns:
+      #   a list of release dates
+      api.generic.release.date.list("/release/dates", "release_id", release.id, 
+                                    realtime.start, realtime.end, limit, offset,
+                                    order.by, sort.order,
+                                    include.dates.with.no.data)
+    }
+
+    api.series <- function() {
+      
+    }
+
+    api.generic.series.list <- function(api.call, id.name, id.value,
+                                        realtime.start, realtime.end, limit,
+                                        offset, order.by, sort.order, 
+                                        filter.variable, filter.value,
+                                        tag.names, exclude.tag.names) {
+      # set params
+      params <- rbind(c(id.name, id.value),
+                      c("realtime_start", as.character(realtime.start)),
+                      c("realtime_end", as.character(realtime.end)),
+                      c("limit", limit),
+                      c("offset", offset),
+                      c("order_by", order.by[1]),
+                      c("sort_order", sort.order[1]),
+                      if (!is.null(filter.variable)) {c("filter_variable",
+                                                        filter.variable)},
+                      if (!is.null(filter.variable)) {c("filter_value",
+                                                        filter.value)},
+                      if (!is.null(tag.names)) {
+                        c("tag_names", paste0(tag.names, collapse = ";"))
+                      },
+                      if (!is.null(exclude.tag.names)) {
+                        c("exclude_tag_names", 
+                          paste0(exclude.tag.names, collapse = ";"))
+                      })
+      # execute query
+      rtn <- api.query(api.call, params)$seriess
+      # parse result
+      ans <- parse.series.list(rtn)
+      return(ans)      
     }
     api.category.series <- function(category.id, 
                                     realtime.start = Sys.Date(), 
@@ -450,33 +749,53 @@ rfred.character <- function(key) {
       #
       # Returns:
       #   A list of series
-      
-      # TODO(jdvermeire): error handling for missing args
-      # set params arg
-      params <- rbind(c("category_id", category.id),
-                      c("realtime_start", as.character(realtime.start)),
-                      c("realtime_end", as.character(realtime.end)),
-                      c("limit", limit),
-                      c("offset", offset),
-                      c("order_by", order.by[1]),
-                      c("sort_order", sort.order[1]),
-                      if (!is.null(filter.variable)) {c("filter_variable",
-                                                        filter.variable)},
-                      if (!is.null(filter.variable)) {c("filter_value",
-                                                        filter.value)},
-                      if (!is.null(tag.names)) {
-                        c("tag_names", paste0(tag.names, collapse = ";"))
-                      },
-                      if (!is.null(exclude.tag.names)) {
-                        c("exclude_tag_names", 
-                          paste0(exclude.tag.names, collapse = ";"))
-                      })
-      # execute query
-      rtn <- api.query("/category/series", params)$seriess
-      # parse result
-      ans <- parse.series.list(rtn)
-      return(ans)
+      api.generic.series.list("/category/series", "category_id", category.id,
+                              realtime.start, realtime.end, limit, offset,
+                              order.by, sort.order, filter.variable, 
+                              filter.value, tag.names, exclude.tag.names)
     }
+    api.release.series <- function(release.id, 
+                                   realtime.start = Sys.Date(), 
+                                   realtime.end = Sys.Date(),
+                                   limit = 1000L, 
+                                   offset = 0L, 
+                                   order.by = c("series_id", "title", "units",
+                                                "frequency", 
+                                                "seasonal_adjustment",
+                                                "realtime_start", 
+                                                "realtime_end",
+                                                "last_updated",
+                                                "observation_start",
+                                                "observation_end",
+                                                "popularity"), 
+                                   sort.order = c("asc", "desc"),
+                                   filter.variable, 
+                                   filter.value, 
+                                   tag.names,
+                                   exclude.tag.names) {
+      # Retrieves a list of series for a release
+      #
+      # Args:
+      #   release.id: the id for the release
+      #   realtime.start: the realtime start
+      #   realtime.end: the realtime end
+      #   limit: the max number of records returned by the query
+      #   offset: the paging offset
+      #   order.by: the attribute to order the results
+      #   sort.order: ascending or descending
+      #   filter.variable: field to filter on
+      #   filter.value: the value to filter
+      #   tag.names: list of tags to filter on
+      #   exclude.tag.names: list of tags to exclude
+      #
+      # Returns:
+      #   A list of series
+      api.generic.series.list("/release/series", "release_id", release.id,
+                              realtime.start, realtime.end, limit, offset,
+                              order.by, sort.order, filter.variable, 
+                              filter.value, tag.names, exclude.tag.names)
+    }
+    
     api.category.tags <- function(category.id, 
                                   realtime.start = Sys.Date(), 
                                   realtime.end = Sys.Date(),
@@ -565,35 +884,19 @@ rfred.character <- function(key) {
       
     }
     
-    api.releases <- function(realtime.start = Sys.Date(),
-                             realtime.end = Sys.Date(),
-                             limit = 1000L,
-                             offset = 0L,
-                             order.by = c("release_id",
-                                          "name",
-                                          "press_release",
-                                          "realtime_start",
-                                          "realtime_end"),
-                             sort.order = c("asc", "desc")) {
-      # set params
-      params <- rbind(c("realtime_start", as.character(realtime.start)),
-                      c("realtime_end", as.character(realtime.end)),
-                      c("limit", limit),
-                      c("offset", offset),
-                      c("order_by", order.by[1]),
-                      c("sort_order", sort.order[1]))
+    api.release.sources <- function() {
       
     }
-    api.releases.dates <- function() {}
-    api.release <- function() {}
-    api.release.dates <- function() {}
-    api.release.series <- function() {}
-    api.release.sources <- function() {}
-    api.release.tags <- function() {}
-    api.release.related.tags <- function() {}
+    api.release.tags <- function() {
+      
+    }
+    api.release.related.tags <- function() {
+      
+    }
     
-    api.series <- function() {}
-    api.series.categories <- function() {}
+    api.series.categories <- function() {
+      
+    }
     api.series.observations <- function(series.id, 
                                         realtime.start = Sys.Date(), 
                                         realtime.end = Sys.Date(),
@@ -678,21 +981,47 @@ rfred.character <- function(key) {
       class(ans) <- "rfred.series.observations"
       return(ans)
     }
-    api.series.release <- function() {}
-    api.series.search <- function() {}
-    api.series.search.tags <- function() {}
-    api.series.search.related.tags <- function() {}
-    api.series.tags <- function() {}
-    api.series.updates <- function() {}
-    api.series.vintagedates <- function() {}
+    api.series.release <- function() {
+      
+    }
+    api.series.search <- function() {
+      
+    }
+    api.series.search.tags <- function() {
+      
+    }
+    api.series.search.related.tags <- function() {
+      
+    }
+    api.series.tags <- function() {
+      
+    }
+    api.series.updates <- function() {
+      
+    }
+    api.series.vintagedates <- function() {
+      
+    }
     
-    api.sources <- function() {}
-    api.source <- function() {}
-    api.source.releases <- function() {}
+    api.sources <- function() {
+      
+    }
+    api.source <- function() {
+      
+    }
+    api.source.releases <- function() {
+      
+    }
     
-    api.tags <- function() {}
-    api.related.tags <- function() {}
-    api.tags.series <- function() {}
+    api.tags <- function() {
+      
+    }
+    api.related.tags <- function() {
+      
+    }
+    api.tags.series <- function() {
+      
+    }
   }, envir = ans)
   
   class(ans) <- "rfred"
