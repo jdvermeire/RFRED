@@ -1,3 +1,2 @@
 importFrom(rjson, fromJSON)
-importFrom(parallel, detectCores, makeCluster, parLapply, parApply)
-export(rfred, rfred.obs)
+export(SetApiKey, GetApiKey)
