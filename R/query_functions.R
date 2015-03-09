@@ -22,7 +22,70 @@ rfred.Query <- function(api_call, api_container, ...) {
                sep = "?")
   qry.con <- url(qry)  # create connection url
   on.exit(close(qry.con))  # make sure connection closes properly
-  ans <- eval(as.symbol(paste0("fromJSON(file = qry.con)$", api_container)))
+  ans <- fromJSON(file = qry.con)[[api_container]]
   if (isOpen(qry.con)) close(qry.con)  # close connection
   return(ans)  
+}
+
+
+# Category Queires --------------------------------------------------------
+
+
+q.category <- function(category_id = 0) {
+  rfred.category(rfred.Query("/category", "categories", category_id)[[1]])
+}
+
+q.category.children <- function() {
+  
+}
+
+q.category.related <- function() {
+  
+}
+
+q.category.series <- function() {
+  
+}
+
+q.category.tags <- function() {
+  
+}
+
+q.category.related_tags <- function() {
+  
+}
+
+
+# Release Queries ---------------------------------------------------------
+
+q.releases <- function() {
+  
+}
+
+q.releases.dates <- function() {
+  
+}
+
+q.release <- function() {
+  
+}
+
+q.release.dates <- function() {
+  
+}
+
+q.release.series <- function() {
+  
+}
+
+q.release.sources <- function() {
+  
+}
+
+q.release.tags <- function() {
+  
+}
+
+q.release.related_tags <- function() {
+  
 }
