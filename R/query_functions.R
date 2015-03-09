@@ -1,11 +1,12 @@
 
 # query functions ---------------------------------------------------------
 
-rfred.Query <- function(api_call, ...) {
+rfred.Query <- function(api_call, api_container, ...) {
   # Provides low-level query function to FRED API
   #
   # Args:
   #   api_call: the api function to call, e.g. "/series/observations"
+  #   api_container: the returned container name for the data
   #   ...: a parameter list
   #
   # Returns:
@@ -21,7 +22,7 @@ rfred.Query <- function(api_call, ...) {
                sep = "?")
   qry.con <- url(qry)  # create connection url
   on.exit(close(qry.con))  # make sure connection closes properly
-  ans <- fromJSON(file = qry.con)  # parse json
+  ans <- eval(as.symbol(paste0("fromJSON(file = qry.con)$", api_container)))
   if (isOpen(qry.con)) close(qry.con)  # close connection
   return(ans)  
 }
