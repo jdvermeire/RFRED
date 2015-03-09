@@ -124,7 +124,9 @@ rfred.list <- function(obj, obj_type) {
   
   ans <- lapply(obj, FUN = eval(as.symbol(paste0("rfred.", obj_type))))
   names(ans) <- do.call("rbind", lapply(ans, FUN = function(x) {x$id}))
-  ans$view <- as.data.frame(do.call("rbind", lapply(ans, FUN = c)))
+  ans$view <- function() {
+    as.data.frame(do.call("rbind", lapply(ans[c(-"view",-"get")], FUN = c)))
+  }
   ans$get <- function(x) {
     x <- as.character(x)
     ans[[x]]
